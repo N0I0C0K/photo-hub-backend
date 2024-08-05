@@ -17,6 +17,7 @@ class AliyunConfig(BaseModel):
 
 
 class StoreConfig(BaseModel):
+    use: str
     aliyun: Optional[AliyunConfig] = None
 
 

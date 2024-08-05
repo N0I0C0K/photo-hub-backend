@@ -25,6 +25,10 @@ class TooManyRequests(AliyunException):
     pass
 
 
+class UserNotAllowedAccessResource(AliyunException):
+    pass
+
+
 HTTP_STATUS_AND_EXCEPTION_MAPPING = {}
 
 
@@ -46,5 +50,7 @@ async def handle_error_status(resp: ClientResponse):
                     raise FileNotFound(info)
                 case "TooManyRequests":
                     raise TooManyRequests(info)
+                case "UserNotAllowedAccessResource":
+                    raise UserNotAllowedAccessResource(info)
                 case _:
                     raise AliyunException({**data, "status": resp.status})

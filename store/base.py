@@ -1,6 +1,9 @@
-from typing import Protocol, Optional, Literal, NamedTuple, Self, TypeVar, Generic
+from typing import Protocol, TypeVar, Generic, Literal, Optional
 from pathlib import PurePosixPath
 from os import PathLike
+from datetime import datetime
+
+from pydantic import BaseModel
 
 StrPath = str | PathLike[str]
 
@@ -49,11 +52,32 @@ class _PathLike(Protocol):
         raise NotImplementedError
 
 
+FileType = Literal["file", "folder"]
+
+
+class Thumbnail(BaseModel):
+    url: str
+
+
+class BaseFile(BaseModel):
+    name: str
+    path: str
+    type: FileType
+    extension: str
+    created_at: datetime
+    updated_at: datetime
+    size: Optional[int] = None
+    thumbnail: Optional[Thumbnail] = None
+
+
 class BasePath(PurePosixPath):
     def is_file(self) -> bool:
         raise NotImplementedError
 
     def is_dir(self) -> bool:
+        raise NotImplementedError
+
+    def to_model(self) -> BaseFile:
         raise NotImplementedError
 
 

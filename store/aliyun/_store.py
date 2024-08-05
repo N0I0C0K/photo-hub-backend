@@ -1,8 +1,9 @@
+from os import fspath
 from typing import Callable, Optional, Self, Protocol
 from inspect import iscoroutinefunction
-from os import fspath
+from datetime import datetime
 
-from store.base import BaseStore, BasePath, StrPath
+from store.base import BaseFile, BaseStore, BasePath, StrPath
 from store.backend.aliyun import *
 from store.backend.aliyun.exception import AccessTokenException, RefreshTokenException
 from store.backend.aliyun.utils import parse_name_path
@@ -13,6 +14,8 @@ class AliyunFileItem(Protocol):
     file_type: FileType
     file_id: str
     drive_id: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class AliyunPath(BasePath):
@@ -43,6 +46,19 @@ class AliyunPath(BasePath):
             AliyunPath(fspath(self), it.name, file_item=it, _store=self._store)
             for it in file_list.items
         ]
+
+    async def get_download_url(self) -> str:
+        return await self._store.get_download_url_by_file_id(self.file_item.file_id)
+
+    def to_model(self) -> BaseFile:
+        return BaseFile(
+            name=self.name,
+            path=self.as_posix(),
+            type=self.file_item.file_type,
+            extension=self.suffix,
+            created_at=self.file_item.created_at,
+            updated_at=self.file_item.updated_at,
+        )
 
 
 class AliyunStore(BaseStore[AliyunPath]):
@@ -132,3 +148,16 @@ class AliyunStore(BaseStore[AliyunPath]):
             AliyunPath(fspath(parent_path), it.name, file_item=it, _store=self)
             for it in file_list.items
         ]
+
+    async def get_download_url(self, path: StrPath) -> str:
+        file_id = self.file_id_and_file_path_mapping.by_val(path)
+        if file_id is None:
+            await self.get_file_item_by_path(path)
+        file_id = self.file_id_and_file_path_mapping.by_val(path)
+        if file_id is None:
+            raise ValueError(f"{path} 路径不存在")
+        return await self.get_download_url_by_file_id(file_id)
+
+    async def get_download_url_by_file_id(self, file_id: str) -> str:
+        res = await get_download_url(self.access_token, self.drive_id, file_id)
+        return res.url

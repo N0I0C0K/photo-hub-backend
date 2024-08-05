@@ -118,6 +118,13 @@ class UserSpaceInfo(BaseModel):
     personal_space_info: PersonalSpaceInfo
 
 
+class FileDownloadInfo(BaseModel):
+    url: str
+    expiration: datetime
+    method: str
+    method: str
+
+
 ROOT_FILE_ITEM = FileItem(
     drive_id="1",
     file_id="root",

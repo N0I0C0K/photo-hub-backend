@@ -1,10 +1,4 @@
-from typing import (
-    Annotated,
-    Literal,
-    TypedDict,
-    NotRequired,
-    Unpack,
-)
+from typing import Annotated, Literal, TypedDict, NotRequired, Unpack, Optional
 from typing_extensions import Doc
 from annotated_types import Unit
 from pydantic import conint, BaseModel, HttpUrl
@@ -19,6 +13,7 @@ from .base import (
     _gen_header,
     AccessTokenType,
     FileItemDetail,
+    FileDownloadInfo,
 )
 from .exception import handle_error_status
 
@@ -77,7 +72,7 @@ async def get_file_list(
     async with request(
         "POST",
         BASE_URL.format("/adrive/v1.0/openFile/list"),
-        json=kwargs,
+        json={**kwargs, "image_thumbnail_width": 512},
         headers=_gen_header(access_token),
         raise_for_status=handle_error_status,  # type: ignore
     ) as resp:
@@ -136,12 +131,22 @@ async def get_file_datail_by_path(
         return FileItemDetail.model_validate(data)
 
 
-class _DownloadResp(BaseModel):
-    url: HttpUrl
-    expiration: datetime
-    method: str
-    method: str
-
-
-async def get_download_url():
-    pass
+async def get_download_url(
+    access_token: AccessTokenType,
+    drive_id: str,
+    file_id: str,
+    expire_sec: Optional[int] = None,
+) -> FileDownloadInfo:
+    async with request(
+        "POST",
+        BASE_URL.format("/adrive/v1.0/openFile/getDownloadUrl"),
+        json={
+            "drive_id": drive_id,
+            "file_id": file_id,
+            "expire_sec": expire_sec,
+        },
+        headers=_gen_header(access_token),
+        raise_for_status=handle_error_status,  # type: ignore
+    ) as resp:
+        data = await resp.json()
+        return FileDownloadInfo.model_validate(data)
