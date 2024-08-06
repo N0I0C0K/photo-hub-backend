@@ -1,4 +1,4 @@
-from typing import Protocol, TypeVar, Generic, Literal, Optional
+from typing import Protocol, TypeVar, Generic, Literal, Optional, Self
 from pathlib import PurePosixPath
 from os import PathLike
 from datetime import datetime
@@ -115,4 +115,8 @@ class BaseStore(Generic[_T]):
         raise NotImplementedError
 
     async def rename(self, path: StrPath, new_name: str) -> bool:
+        raise NotImplementedError
+
+    @classmethod
+    async def spawn(cls, cfg) -> Self:
         raise NotImplementedError

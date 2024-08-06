@@ -3,17 +3,21 @@ from typing import Callable, Optional, Self, Protocol
 from inspect import iscoroutinefunction
 from datetime import datetime
 
-from store.base import BaseFile, BaseStore, BasePath, StrPath
+from store.base import BaseFile, BaseStore, BasePath, StrPath, Thumbnail
 from store.backend.aliyun import *
 from store.backend.aliyun.exception import AccessTokenException, RefreshTokenException
 from store.backend.aliyun.utils import parse_name_path
 from utils import bidict
+
+from config._base import AliyunConfig
 
 
 class AliyunFileItem(Protocol):
     file_type: FileType
     file_id: str
     drive_id: str
+    size: Optional[int]
+    thumbnail: Optional[str]
     created_at: datetime
     updated_at: datetime
 
@@ -56,6 +60,12 @@ class AliyunPath(BasePath):
             path=self.as_posix(),
             type=self.file_item.file_type,
             extension=self.suffix,
+            size=self.file_item.size,
+            thumbnail=(
+                Thumbnail(url=self.file_item.thumbnail)
+                if self.file_item.thumbnail
+                else None
+            ),
             created_at=self.file_item.created_at,
             updated_at=self.file_item.updated_at,
         )
@@ -161,3 +171,8 @@ class AliyunStore(BaseStore[AliyunPath]):
     async def get_download_url_by_file_id(self, file_id: str) -> str:
         res = await get_download_url(self.access_token, self.drive_id, file_id)
         return res.url
+
+    @classmethod
+    async def spawn(cls, cfg: AliyunConfig) -> Self:
+        init_aliyun_api(cfg.client_id, cfg.client_secret)
+        return await cls.create(cfg.refresh_token, cfg.access_token)

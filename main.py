@@ -1,8 +1,14 @@
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
-from aliyun.login import login_use_redirect
 
-app = FastAPI()
+from store import store_manager
+from store.backend.aliyun import login_use_redirect
+
+
+from handler.file import file_api
+
+app = FastAPI(on_startup=[store_manager.setup])
+app.include_router(file_api)
 
 
 @app.get("/login")
