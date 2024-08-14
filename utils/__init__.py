@@ -1,14 +1,27 @@
 from collections.abc import MutableMapping, Mapping
-from typing import ItemsView, Iterator, KeysView, ValuesView, Optional
+from typing import (
+    ItemsView,
+    Iterator,
+    KeysView,
+    ValuesView,
+    Optional,
+    TypeVar,
+    Generic,
+    Hashable,
+)
 from cachetools import TTLCache
 
+_KT = TypeVar("_KT", bound=Hashable)
+_KV = TypeVar("_KV", bound=Hashable)
 
-class bidict[_KT, _KV](MutableMapping[_KT, _KV]):
+
+class bidict(Generic[_KT, _KV], MutableMapping[_KT, _KV]):
     def __init__(
         self,
         mapping: Optional[Mapping[_KT, _KV]] = None,
         ttl: Optional[float] = None,
         max_size: Optional[int] = None,
+        frozen_mapping: Optional[Mapping[_KT, _KV]] = None,
     ) -> None:
         if mapping is None:
             mapping = {}
@@ -21,6 +34,13 @@ class bidict[_KT, _KV](MutableMapping[_KT, _KV]):
         else:
             self.key_to_value = dict(mapping)
             self.value_to_key = {v: k for k, v in mapping.items()}
+
+        self.frozen_key_to_val_mapping: Mapping[_KT, _KV] = (
+            frozen_mapping if frozen_mapping else {}
+        )
+        self.frozen_val_to_key_mapping: Mapping[_KV, _KT] = {
+            ival: ikey for ikey, ival in self.frozen_key_to_val_mapping.items()
+        }
 
     def keys(self) -> KeysView[_KT]:
         return self.key_to_value.keys()

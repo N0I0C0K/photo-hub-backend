@@ -1,9 +1,19 @@
-from typing import Protocol, TypeVar, Generic, Literal, Optional, Self
+from typing import (
+    Protocol,
+    TypeVar,
+    Generic,
+    Literal,
+    Optional,
+    Self,
+    Callable,
+    Coroutine,
+)
 from pathlib import PurePosixPath
 from os import PathLike
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
 
 StrPath = str | PathLike[str]
 
@@ -59,13 +69,19 @@ class Thumbnail(BaseModel):
     url: str
 
 
+EMPTY_DATE = datetime(2000, 1, 1, 0, 0, 0)
+
+DisposeFunc = Callable[[], None | Coroutine[None, None, None]]
+
+
 class BaseFile(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
     name: str
     path: str
     type: FileType
     extension: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: datetime = EMPTY_DATE
+    updated_at: datetime = EMPTY_DATE
     size: Optional[int] = None
     thumbnail: Optional[Thumbnail] = None
 
@@ -75,6 +91,9 @@ class BasePath(PurePosixPath):
         raise NotImplementedError
 
     def is_dir(self) -> bool:
+        raise NotImplementedError
+
+    async def listdir(self) -> list[Self]:
         raise NotImplementedError
 
     def to_model(self) -> BaseFile:
@@ -117,6 +136,8 @@ class BaseStore(Generic[_T]):
     async def rename(self, path: StrPath, new_name: str) -> bool:
         raise NotImplementedError
 
+    async def dispose(self): ...
+
     @classmethod
-    async def spawn(cls, cfg) -> Self:
+    async def spawn(cls, cfg) -> tuple[Self, DisposeFunc]:
         raise NotImplementedError

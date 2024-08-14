@@ -1,4 +1,5 @@
 from typing import Mapping, Type
+from inspect import iscoroutinefunction
 
 from .base import BaseStore, BasePath
 from .aliyun import AliyunStore
@@ -21,15 +22,21 @@ class StoreManager:
         store_use = global_config.store.use
         if store_use not in STORE_NAME_AND_STORE_FACTOR_MAPPING:
             raise NotImplementedError
-        store_cfg = getattr(global_config.store, "aliyun")
+        store_cfg = getattr(global_config.store, store_use)
         factor = STORE_NAME_AND_STORE_FACTOR_MAPPING[store_use]
-        self._store = await factor.spawn(store_cfg)
+        self._store, self._store_dispose_func = await factor.spawn(store_cfg)
 
     @property
     def store(self):
         if self._store is None:
             raise ValueError
         return self._store
+
+    async def dispose(self):
+        if iscoroutinefunction(self._store_dispose_func):
+            await self._store_dispose_func()
+        else:
+            self._store_dispose_func()
 
 
 store_manager = StoreManager()

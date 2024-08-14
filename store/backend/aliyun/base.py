@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, HttpUrl, ConfigDict
 from datetime import datetime
 from aiohttp import request
 from contextvars import ContextVar
-
+from contextlib import contextmanager
 
 _Model_T = TypeVar("_Model_T", bound=BaseModel)
 
@@ -136,6 +136,12 @@ ROOT_FILE_ITEM = FileItem(
 )
 
 
-def init_aliyun_api(client_id: str, client_secret: str):
-    CLIENT_ID.set(client_id)
-    CLIENT_SECRET.set(client_secret)
+@contextmanager
+def with_cfg(client_id: str, client_secret: str):
+    id_token = CLIENT_ID.set(client_id)
+    secret_token = CLIENT_SECRET.set(client_secret)
+    try:
+        yield None
+    finally:
+        CLIENT_ID.reset(id_token)
+        CLIENT_SECRET.reset(secret_token)

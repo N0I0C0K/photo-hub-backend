@@ -9,7 +9,7 @@ from store.backend.aliyun.exception import AccessTokenException, RefreshTokenExc
 from store.backend.aliyun.utils import parse_name_path
 from utils import bidict
 
-from config._base import AliyunConfig
+from config import AliyunConfig
 
 
 class AliyunFileItem(Protocol):
@@ -75,6 +75,7 @@ class AliyunStore(BaseStore[AliyunPath]):
     access_token: str
     refresh_token: str
     drive_id: str
+    api_client: AliyunApiClient
     file_id_and_file_path_mapping: bidict[str, StrPath]
 
     def __init__(self) -> None:
@@ -82,9 +83,13 @@ class AliyunStore(BaseStore[AliyunPath]):
 
     @classmethod
     async def create(
-        cls, refresh_token: str, access_token: Optional[str] = None
+        cls,
+        api_client: AliyunApiClient,
+        refresh_token: str,
+        access_token: Optional[str] = None,
     ) -> Self:
         target = cls()
+        target.api_client = api_client
         target.refresh_token = refresh_token
         if not access_token:
             await target._refresh_token()
@@ -93,7 +98,7 @@ class AliyunStore(BaseStore[AliyunPath]):
         user_drive_info = await get_user_drive_info(target.access_token)
         target.drive_id = user_drive_info.default_drive_id
         target.file_id_and_file_path_mapping = bidict(
-            {"root": "/root"},
+            {},
             max_size=128,
             ttl=60 * 10,
         )
@@ -101,7 +106,9 @@ class AliyunStore(BaseStore[AliyunPath]):
         return target
 
     async def _refresh_token(self):
-        new_token = await acquire_token_by_refresh_token(self.refresh_token)
+        new_token = await self.api_client.acquire_token_by_refresh_token(
+            self.refresh_token
+        )
         self.access_token = new_token.access_token
         self.refresh_token = new_token.refresh_token
 
@@ -122,13 +129,26 @@ class AliyunStore(BaseStore[AliyunPath]):
             if iscoroutinefunction(att_val):
                 setattr(self, att_name, warp_retry_when_token_failed(att_val))
 
-    async def listdir(self, dir_path: StrPath = "/root") -> list[AliyunPath]:
-        dir_file_id = self.file_id_and_file_path_mapping.by_val(dir_path)
+    async def get_file_id_by_path(self, path: StrPath) -> str:
+        if fspath(path) == "/root":
+            return "root"
+        dir_file_id = self.file_id_and_file_path_mapping.by_val(path)
         if dir_file_id is None:
             # dir_file_id = await self.get_file_id_by_path(dir_path)
-            await self.get_file_item_by_path(dir_path)
+            await self.get_file_item_by_path(path)
+            dir_file_id = self.file_id_and_file_path_mapping.by_val(path)
+        assert dir_file_id
+        return dir_file_id
 
-        dir_file_id = self.file_id_and_file_path_mapping.by_val(dir_path)
+    async def get_file_path_by_id(self, file_id: str) -> StrPath:
+        if file_id == "root":
+            return "/root"
+        if file_id not in self.file_id_and_file_path_mapping:
+            await self.get_file_item_by_id(file_id)
+        return self.file_id_and_file_path_mapping[file_id]
+
+    async def listdir(self, dir_path: StrPath = "/root") -> list[AliyunPath]:
+        dir_file_id = await self.get_file_id_by_path(dir_path)
         assert dir_file_id
         return await self.listdir_by_file_id(dir_file_id)
 
@@ -148,9 +168,7 @@ class AliyunStore(BaseStore[AliyunPath]):
         return AliyunPath(fspath(path), file_item=file_item, _store=self)
 
     async def listdir_by_file_id(self, file_id: str) -> list[AliyunPath]:
-        if file_id not in self.file_id_and_file_path_mapping:
-            await self.get_file_item_by_id(file_id)
-        parent_path = self.file_id_and_file_path_mapping[file_id]
+        parent_path = await self.get_file_path_by_id(file_id)
         file_list = await get_file_list(
             self.access_token, drive_id=self.drive_id, parent_file_id=file_id
         )
@@ -160,10 +178,7 @@ class AliyunStore(BaseStore[AliyunPath]):
         ]
 
     async def get_download_url(self, path: StrPath) -> str:
-        file_id = self.file_id_and_file_path_mapping.by_val(path)
-        if file_id is None:
-            await self.get_file_item_by_path(path)
-        file_id = self.file_id_and_file_path_mapping.by_val(path)
+        file_id = await self.get_file_id_by_path(path)
         if file_id is None:
             raise ValueError(f"{path} 路径不存在")
         return await self.get_download_url_by_file_id(file_id)
@@ -173,6 +188,16 @@ class AliyunStore(BaseStore[AliyunPath]):
         return res.url
 
     @classmethod
-    async def spawn(cls, cfg: AliyunConfig) -> Self:
-        init_aliyun_api(cfg.client_id, cfg.client_secret)
-        return await cls.create(cfg.refresh_token, cfg.access_token)
+    async def spawn(cls, cfg: AliyunConfig):
+        api_client = AliyunApiClient(cfg.client_id, cfg.client_secret)
+        store = await cls.create(api_client, cfg.refresh_token, cfg.access_token)
+
+        async def dispose():
+            await store.dispose()
+            cfg.access_token = store.access_token
+            cfg.refresh_token = store.refresh_token
+
+        return store, dispose
+
+    async def dispose(self):
+        pass

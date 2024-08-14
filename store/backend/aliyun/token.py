@@ -2,26 +2,41 @@ from aiohttp.client import request
 
 from typing import Optional
 
-from .base import BASE_URL, AccessToken, CLIENT_ID, CLIENT_SECRET
+from store.backend.aliyun.base import BASE_URL
+
+from .base import BASE_URL, AccessToken
 
 
 async def acquire_token_by_code(
     code: str,
+    client_id: str,
+    client_secret: str,
 ) -> AccessToken:
-    return await _acquire_access_token(code=code)
+    return await _acquire_access_token(
+        code=code, client_id=client_id, client_secret=client_secret
+    )
 
 
-async def acquire_token_by_refresh_token(refresh_token: str) -> AccessToken:
-    return await _acquire_access_token(refresh_token=refresh_token)
+async def acquire_token_by_refresh_token(
+    refresh_token: str,
+    client_id: str,
+    client_secret: str,
+) -> AccessToken:
+    return await _acquire_access_token(
+        refresh_token=refresh_token, client_id=client_id, client_secret=client_secret
+    )
 
 
 async def _acquire_access_token(
     code: Optional[str] = None,
     refresh_token: Optional[str] = None,
+    *,
+    client_id: str,
+    client_secret: str | None = None,
 ) -> AccessToken:
     body = {
-        "client_id": CLIENT_ID.get(),
-        "client_secret": CLIENT_SECRET.get(),
+        "client_id": client_id,
+        "client_secret": client_secret,
     }
     if code:
         body.update(code=code, grant_type="authorization_code")
